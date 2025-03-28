@@ -27,7 +27,7 @@ for service_entry in "${SERVICES_ENTRIES[@]}"; do
 
   echo "[INFO] Current pristine image: $PRISTINE_IMAGE"
 
-  # Download the image and fetch attestation using cosign
+  # Download the image and fetch attestation using cosign...
   cosign download attestation "$PRISTINE_IMAGE" > "$TMP_FOLDER/cosign_${component_name}_metadata.json"
 
   # Extract SOURCE_ARTIFACT from attestation metadata
