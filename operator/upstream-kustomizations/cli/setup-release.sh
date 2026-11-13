@@ -31,6 +31,14 @@ Options:
                             enterprise-contract-service namespace (default: default)
   -r, --release-name        Name for the ReleasePlan and ReleasePlanAdmission
                             resources (default: local-release)
+  -A, --release-author      Human identity to set as the ReleasePlan's
+                            release.appstudio.openshift.io/author label. The
+                            release-service author webhook rejects ReleasePlans
+                            authored by a service account, so this must be a
+                            human identity, not a serviceaccount. Must also be
+                            a valid Kubernetes label value: use '.' instead of
+                            '@' if you want an email-like identity
+                            (default: konflux-ci.noreply)
   -R, --catalog-revision    Release service catalog git revision (default: production)
   -I, --image-name-prefix   Prefix for Quay image repository names. Must be unique
                             across concurrent CI runs to avoid credential collisions.
@@ -83,6 +91,11 @@ APPLICATION="sample-component"
 PRODUCT_VERSION="0.1"
 CONFORMA_POLICY="default"
 RELEASE_NAME="local-release"
+# release-service's author webhook rejects ReleasePlans authored by a service
+# account, and only derives an author when the label is absent -- so this
+# must be set explicitly, at create time, to a non-serviceaccount identity.
+# Must be a valid Kubernetes label value (no '@'; use '.' for email-like values).
+RELEASE_AUTHOR="konflux-ci.noreply"
 # renovate: datasource=git-refs depName=https://github.com/konflux-ci/release-service-catalog currentValue=development
 CATALOG_REVISION="e372b87cc7d6f1966a04f798824b412ec7310417"
 IMAGE_NAME_PREFIX=""
@@ -120,6 +133,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--release-name)
             RELEASE_NAME="$2"
+            shift 2
+            ;;
+        -A|--release-author)
+            RELEASE_AUTHOR="$2"
             shift 2
             ;;
         -R|--catalog-revision)
@@ -440,6 +457,12 @@ spec:
 EOF
 
 # Step 13: Create ReleasePlan in tenant namespace
+#
+# The author label is set explicitly here, at create time, to a non-serviceaccount
+# identity (RELEASE_AUTHOR). release-service's author webhook only derives an author
+# from the requester when the label is absent; since this script runs as whatever
+# ServiceAccount the caller is using (e.g. a CI pod's SA), an auto-derived author would
+# be in the "system_serviceaccount_<ns>_<sa>" form, which the webhook rejects.
 echo "📋 Creating ReleasePlan in tenant namespace '${TENANT_NS}'..."
 kubectl apply -f - <<EOF
 apiVersion: appstudio.redhat.com/v1alpha1
@@ -448,6 +471,7 @@ metadata:
   labels:
     release.appstudio.openshift.io/auto-release: "true"
     release.appstudio.openshift.io/standing-attribution: "true"
+    release.appstudio.openshift.io/author: "${RELEASE_AUTHOR}"
   name: ${RELEASE_NAME}
   namespace: ${TENANT_NS}
 spec:
